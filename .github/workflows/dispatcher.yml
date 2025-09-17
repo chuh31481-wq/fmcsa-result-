@@ -43,18 +43,13 @@ jobs:
           echo "matrix=$JSON_CONTENT" >> $GITHUB_OUTPUT
 
   trigger-extractors:
-    needs: dispatch-jobs
-    runs-on: ubuntu-latest
-    if: ${{ needs.dispatch-jobs.outputs.matrix != '{"include":[]}' }}
-
-    strategy:
-      matrix: ${{ fromJson(needs.dispatch-jobs.outputs.matrix) }}
-
-    steps:
-      - name: Trigger extractor for batch ${{ matrix.batch_file }}
-        uses: peter-evans/repository-dispatch@v3
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          repository: ${{ github.repository }}
-          event-type: run-single-fmcsa-batch
-          client-payload: '{"batch_file_path": "${{ matrix.batch_file }}"}'
+  # ... (upar ka code waisa hi rahega) ...
+  steps:
+    - name: Trigger extractor for batch ${{ matrix.batch_file }}
+      uses: peter-evans/repository-dispatch@v3
+      with:
+        # YEH LINE BADALNI HAI
+        token: ${{ secrets.MY_PAT }} 
+        repository: ${{ github.repository }}
+        event-type: run-single-fmcsa-batch
+        client-payload: '{"batch_file_path": "${{ matrix.batch_file }}"}'
