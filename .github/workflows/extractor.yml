@@ -9,7 +9,7 @@ jobs:
   run:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write # Taake yeh CSV file ko commit kar sake
 
     steps:
       - name: Checkout repository
@@ -23,29 +23,47 @@ jobs:
       - name: Get batch file path from payload
         id: get_payload
         run: |
-          batch_path=$(echo '${{ github.event.client_payload.batch_file_path }}' | jq -r '.')
+          # toJSON function ka istemal karke payload ko safely parse karna
+          batch_path=$(echo '${{ toJSON(github.event.client_payload) }}' | jq -r '.batch_file_path')
           echo "Processing batch file: $batch_path"
           echo "batch_file=$batch_path" >> $GITHUB_OUTPUT
 
       - name: Rename batch file for script
+        # extractor.js 'batch.txt' naam ki file dhoondta hai
         run: mv ${{ steps.get_payload.outputs.batch_file }} batch.txt
 
       - name: Run extractor for this batch
         run: |
           node -v
           mkdir -p output
+          # extractor.js ab batch.txt se data parhega
           node extractor.js
         env:
+          # Yahan aap CONCURRENCY, DELAY etc. set kar sakte hain
           CONCURRENCY: 4
           DELAY: 1000
           MODE: 'both'
 
       - name: Commit and Push CSV output
-        if: always()
+        if: always() # Yeh step hamesha chalega, chahe pichla fail ho ya pass
         run: |
           git config --global user.name 'GitHub Actions'
           git config --global user.email 'actions@github.com'
           git pull
           git add output/*.csv
-          git diff --staged --quiet || git commit -m "Add FMCSA scrape results for batch"
-          git push
+          # Agar koi nayi file ho to hi commit karein, warna error na do
+          if ! git diff --staged --quiet; then
+            git commit -m "Add FMCSA scrape results for batch"
+            git push
+          else
+            echo "No new CSV files to commit."
+          fi
+
+      - name: Upload CSV artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fmcsa-output-for-${{ steps.get_payload.outputs.batch_file }}
+          path: output/*.csv
+          if-no-files-found: ignore
+          retention-days: 7
