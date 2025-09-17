@@ -54,5 +54,5 @@ jobs:
           token: ${{ secrets.MY_PAT }}
           repository: ${{ github.repository }}
           event-type: run-single-fmcsa-batch
-          # YAHAN ASAL TABDEELI HAI: Hum payload ko JSON string ke tor par bhej rahe hain
-          client-payload: '{"batch_file_path": "${{ matrix.batch_file }}"}'
+          # Hum ab poori repository ka reference (SHA) bhej rahe hain
+          client-payload: '{"ref": "${{ github.sha }}", "batch_file_path": "${{ matrix.batch_file }}"}'
