@@ -11,32 +11,26 @@ jobs:
       contents: write
 
     steps:
-      # --- YAHAN ASAL TABDEELI HAI ---
-      # Hum us commit se code checkout kar rahe hain jahan batch files bani theen
-      - name: Checkout specific commit with batch files
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.client_payload.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Get batch file path from payload
-        id: get_payload
+      - name: Create batch.txt from payload
+        id: create_batch
         run: |
-          batch_path=$(echo '${{ toJSON(github.event.client_payload) }}' | jq -r '.batch_file_path')
-          echo "Processing batch file: $batch_path"
-          echo "batch_file=$batch_path" >> $GITHUB_OUTPUT
-
-      - name: Rename batch file for script
-        run: mv ${{ steps.get_payload.outputs.batch_file }} batch.txt
+          # 'dispatcher.yml' se bheje gaye MC numbers ko batch.txt mein likhna
+          echo "${{ github.event.client_payload.mc_numbers }}" > batch.txt
+          echo "Created batch.txt with $(wc -l < batch.txt) MC numbers."
 
       - name: Run extractor for this batch
         run: |
           node -v
           mkdir -p output
+          # extractor.js ab is nayi bani hui batch.txt se data parhega
           node extractor.js
         env:
           CONCURRENCY: 4
@@ -51,7 +45,7 @@ jobs:
           git pull
           git add output/*.csv
           if ! git diff --staged --quiet; then
-            git commit -m "Add FMCSA scrape results for batch"
+            git commit -m "Add FMCSA scrape results"
             git push
           else
             echo "No new CSV files to commit."
