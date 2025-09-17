@@ -21,7 +21,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Split mc_list.txt into batches
+      - name: Create JSON matrix of MC number batches
         id: create_jobs
         run: |
           if [ ! -f mc_list.txt ]; then
@@ -29,11 +29,15 @@ jobs:
             exit 1
           fi
           
-          mkdir -p .batches
           BATCH_SIZE=${{ github.event.client_payload.batch_size || github.event.inputs.batch_size }}
-          split -l $BATCH_SIZE mc_list.txt .batches/mc_batch_
           
-          JSON_CONTENT=$(ls .batches/mc_batch_* | jq -c -R '{"batch_file": .}' | jq -c -s '{"include": .}')
+          # 'jq' ka istemal karke MC numbers ki list ko JSON mein badalna
+          JSON_CONTENT=$(cat mc_list.txt | jq -R . | jq -s -c --argjson size "$BATCH_SIZE" '
+            . as $all | 
+            [range(0; $all | length; $size)] | 
+            map({ "mc_list": $all[.:.+$size] | join("\n") }) | 
+            {"include": .}
+          ')
           
           echo "Generated Matrix:"
           echo $JSON_CONTENT
@@ -48,11 +52,10 @@ jobs:
       matrix: ${{ fromJson(needs.dispatch-jobs.outputs.matrix) }}
 
     steps:
-      - name: Trigger extractor for batch ${{ matrix.batch_file }}
+      - name: Trigger extractor for a batch
         uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.MY_PAT }}
           repository: ${{ github.repository }}
           event-type: run-single-fmcsa-batch
-          # Hum ab poori repository ka reference (SHA) bhej rahe hain
-          client-payload: '{"ref": "${{ github.sha }}", "batch_file_path": "${{ matrix.batch_file }}"}'
+          client-payload: '{"mc_numbers": ${{ toJSON(matrix.mc_list) }} }'
