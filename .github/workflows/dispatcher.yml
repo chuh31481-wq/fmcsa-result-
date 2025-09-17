@@ -12,6 +12,7 @@ on:
     types: [run-dispatcher-from-frontend]
 
 jobs:
+  # JOB 1: Batches banana aur agle job ke liye matrix tayyar karna
   dispatch-jobs:
     runs-on: ubuntu-latest
     outputs:
@@ -34,7 +35,6 @@ jobs:
           split -l $BATCH_SIZE mc_list.txt .batches/mc_batch_
           
           # 'jq' tool ka istemal karke ek single-line JSON banayein
-          # -c flag (compact output) yaqeen karega ke yeh single line hai
           JSON_CONTENT=$(ls .batches/mc_batch_* | jq -c -R '{"batch_file": .}' | jq -c -s '{"include": .}')
           
           echo "Generated Matrix:"
@@ -42,14 +42,22 @@ jobs:
           
           echo "matrix=$JSON_CONTENT" >> $GITHUB_OUTPUT
 
+  # JOB 2: Har batch ke liye extractor ko trigger karna
   trigger-extractors:
-  # ... (upar ka code waisa hi rahega) ...
-  steps:
-    - name: Trigger extractor for batch ${{ matrix.batch_file }}
-      uses: peter-evans/repository-dispatch@v3
-      with:
-        # YEH LINE BADALNI HAI
-        token: ${{ secrets.MY_PAT }} 
-        repository: ${{ github.repository }}
-        event-type: run-single-fmcsa-batch
-        client-payload: '{"batch_file_path": "${{ matrix.batch_file }}"}'
+    needs: dispatch-jobs
+    runs-on: ubuntu-latest
+    if: ${{ needs.dispatch-jobs.outputs.matrix != '{"include":[]}' }}
+
+    strategy:
+      matrix: ${{ fromJson(needs.dispatch-jobs.outputs.matrix) }}
+
+    steps:
+      - name: Trigger extractor for batch ${{ matrix.batch_file }}
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          # --- YAHAN ASAL TABDEELI HAI ---
+          # Ab hum apna banaya hua Personal Access Token istemal kar rahe hain
+          token: ${{ secrets.MY_PAT }}
+          repository: ${{ github.repository }}
+          event-type: run-single-fmcsa-batch
+          client-payload: '{"batch_file_path": "${{ matrix.batch_file }}"}'
