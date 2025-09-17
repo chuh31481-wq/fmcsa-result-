@@ -1,15 +1,19 @@
 name: FMCSA Dispatcher (All Batches)
 
 on:
+  # Manual run ke liye (Run workflow button)
   workflow_dispatch:
     inputs:
       batch_size:
-        description: 'Batch size per run'
+        description: 'Number of MCs per batch'
         required: false
         default: '500'
+  
+  # API se trigger hone ke liye (frontend se)
+  repository_dispatch:
+    types: [run-dispatcher-from-frontend]
 
 jobs:
-  # JOB 1: Batches banana aur agle job ke liye matrix tayyar karna
   dispatch-jobs:
     runs-on: ubuntu-latest
     outputs:
@@ -19,33 +23,29 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Split mc_list.txt into batches and create jobs
+      - name: Split mc_list.txt into batches
         id: create_jobs
         run: |
-          # Agar mc_list.txt mojood nahi hai to error de kar ruk jao
           if [ ! -f mc_list.txt ]; then
             echo "mc_list.txt not found!"
             exit 1
           fi
           
           mkdir -p .batches
-          split -l ${{ github.event.inputs.batch_size }} mc_list.txt .batches/mc_batch_
+          # Agar frontend se batch_size aaya hai to usay istemal karo, warna default
+          BATCH_SIZE=${{ github.event.client_payload.batch_size || github.event.inputs.batch_size }}
+          split -l $BATCH_SIZE mc_list.txt .batches/mc_batch_
           
-          # 'jq' tool ka istemal karke ek single-line JSON banayein
+          # 'jq' ka istemal karke single-line JSON banayein
           JSON_CONTENT=$(ls .batches/mc_batch_* | jq -R '{"batch_file": .}' | jq -s '{"include": .}')
           
           echo "Generated Matrix:"
           echo $JSON_CONTENT
-          
-          # Result ko GitHub output mein set karein
           echo "matrix=$JSON_CONTENT" >> $GITHUB_OUTPUT
 
-  # JOB 2: Har batch ke liye extractor ko trigger karna
   trigger-extractors:
-    needs: dispatch-jobs # Pehle job ke mukammal hone ka intezar karein
+    needs: dispatch-jobs
     runs-on: ubuntu-latest
-    
-    # Agar koi batch file na bane to is job ko na chalao
     if: ${{ needs.dispatch-jobs.outputs.matrix != '{"include":[]}' }}
 
     strategy:
