@@ -11,8 +11,12 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout repository
+      # --- YAHAN ASAL TABDEELI HAI ---
+      # Hum us commit se code checkout kar rahe hain jahan batch files bani theen
+      - name: Checkout specific commit with batch files
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.client_payload.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -22,7 +26,6 @@ jobs:
       - name: Get batch file path from payload
         id: get_payload
         run: |
-          # YAHAN ASAL TABDEELI HAI: Hum payload ko toJSON se parh rahe hain
           batch_path=$(echo '${{ toJSON(github.event.client_payload) }}' | jq -r '.batch_file_path')
           echo "Processing batch file: $batch_path"
           echo "batch_file=$batch_path" >> $GITHUB_OUTPUT
