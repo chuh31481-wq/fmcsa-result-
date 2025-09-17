@@ -1,62 +1,66 @@
 name: FMCSA Extractor (Single Batch)
 
 on:
-  workflow_dispatch:
-    inputs:
-      batch_index:
-        description: 'Which batch to run (0-based)'
-        required: true
-        default: '0'
-      batch_size:
-        description: 'Batch size'
-        required: false
-        default: '250'
-      concurrency:
-        description: 'Parallel requests'
-        required: false
-        default: '4'
-      delay:
-        description: 'Delay between waves (ms)'
-        required: false
-        default: '1000'
-      wait_seconds:
-        description: 'Pause between batches (not used here)'
-        required: false
-        default: '0'
-      mode:
-        description: 'both (extract) or urls (only URLs)'
-        required: false
-        default: 'both'
+  # Isay ab sirf API se trigger kiya ja sakta hai
+  repository_dispatch:
+    types: [run-single-fmcsa-batch]
 
 jobs:
   run:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Taake yeh CSV file ko commit kar sake
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
+      - name: Get batch file path from payload
+        id: get_payload
+        run: |
+          # 'dispatcher.yml' se bheji gayi batch file ka path haasil karna
+          batch_path=$(echo '${{ github.event.client_payload.batch_file_path }}' | jq -r '.')
+          echo "Processing batch file: $batch_path"
+          # Is path ko agle step ke liye set karna
+          echo "batch_file=$batch_path" >> $GITHUB_OUTPUT
+
+      - name: Rename batch file for script
+        # extractor.js 'batch.txt' naam ki file dhoondta hai
+        run: mv ${{ steps.get_payload.outputs.batch_file }} batch.txt
+
       - name: Run extractor for this batch
-        env:
-          MODE: ${{ github.event.inputs.mode }}
-          CONCURRENCY: ${{ github.event.inputs.concurrency }}
-          DELAY: ${{ github.event.inputs.delay }}
-          BATCH_SIZE: ${{ github.event.inputs.batch_size }}
-          WAIT_SECONDS: ${{ github.event.inputs.wait_seconds }}
-          BATCH_INDEX: ${{ github.event.inputs.batch_index }}
         run: |
           node -v
           mkdir -p output
+          # extractor.js ab batch.txt se data parhega
           node extractor.js
+        env:
+          # Yahan aap CONCURRENCY, DELAY etc. set kar sakte hain
+          CONCURRENCY: 4
+          DELAY: 1000
+          MODE: 'both'
+
+      - name: Commit and Push CSV output
+        if: always() # Yeh step hamesha chalega, chahe pichla fail ho ya pass
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          git pull
+          git add output/*.csv
+          # Agar koi nayi file ho to hi commit karein
+          git diff --staged --quiet || git commit -m "Add FMCSA scrape results for batch"
+          git push
 
       - name: Upload CSV artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: fmcsa-output-batch-${{ github.event.inputs.batch_index }}
+          name: fmcsa-output-for-${{ steps.get_payload.outputs.batch_file }}
           path: output/*.csv
           if-no-files-found: ignore
           retention-days: 7
