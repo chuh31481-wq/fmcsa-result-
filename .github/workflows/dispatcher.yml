@@ -6,34 +6,59 @@ on:
       batch_size:
         description: 'Batch size per run'
         required: false
-        default: '250'
+        default: '500'
 
 jobs:
-  dispatch:
+  dispatch-jobs:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Split mc_list into batches
+      - name: Split mc_list.txt into batches and create jobs
+        id: create_jobs
         run: |
-          mkdir -p batches
-          split -l ${{ github.event.inputs.batch_size }} mc_list.txt batches/batch_
-          ls -l batches
-
-      - name: Dispatch extractor for each batch
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          i=0
-          for f in batches/*; do
-            echo "Dispatching batch $f (index $i)..."
-            gh workflow run extractor.yml \
-              --ref main \
-              -f batch_index=$i \
-              -f batch_size=${{ github.event.inputs.batch_size }} \
-              -f concurrency=4 \
-              -f delay=1000 \
-              -f wait_seconds=0 \
-              -f mode=both
-            i=$((i+1))
+          # Batches ka folder banayein
+          mkdir -p .batches
+              
+          # mc_list.txt ko chotay hisson mein torein
+          split -l ${{ github.event.inputs.batch_size }} mc_list.txt .batches/mc_batch_
+              
+          # Har batch file ke liye ek JSON object banayein
+          # Yeh object agle step mein "matrix" ke tor par istemal hoga
+          echo "matrix={\"include\":[" > jobs.json
+          for f in .batches/mc_batch_*; do
+            echo "{\"batch_file\":\"$f\"}," >> jobs.json
           done
+          # Aakhri comma hata kar array band karein
+          sed -i '$ s/,$//' jobs.json
+          echo "]}" >> jobs.json
+              
+          # Result ko GitHub output mein set karein
+          cat jobs.json
+          echo "matrix=$(cat jobs.json)" >> $GITHUB_OUTPUT
+
+    outputs:
+      matrix: ${{ steps.create_jobs.outputs.matrix }}
+
+  # Yeh doosra job pehle job ke baad chalega
+  trigger-extractors:
+    needs: dispatch-jobs # Pehle dispatch-jobs ke mukammal hone ka intezar karein
+    runs-on: ubuntu-latest
+        
+    # Yahan "matrix" strategy ka istemal ho raha hai
+    # Yeh har batch file ke liye ek alag job run karega
+    strategy:
+      matrix: ${{ fromJson(needs.dispatch-jobs.outputs.matrix) }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Trigger extractor for batch ${{ matrix.batch_file }}
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }} # Hum built-in token istemal kar rahe hain
+          repository: ${{ github.repository }} # Isi repository ko trigger karna hai
+          event-type: run-single-fmcsa-batch
+          client-payload: '{"batch_file_path": "${{ matrix.batch_file }}"}'
