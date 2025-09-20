@@ -1,61 +1,30 @@
-name: FMCSA Dispatcher (All Batches)
+name: FMCSA Dispatcher Workflow
 
 on:
-  workflow_dispatch:
-    inputs:
-      batch_size:
-        description: 'Number of MCs per batch'
-        required: false
-        default: '500'
-  
   repository_dispatch:
     types: [run-dispatcher-from-frontend]
 
 jobs:
-  dispatch-jobs:
+  dispatch-fmcsa-jobs:
     runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.create_jobs.outputs.matrix }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Create JSON matrix of MC number batches
-        id: create_jobs
-        run: |
-          if [ ! -f mc_list.txt ]; then
-            echo "mc_list.txt not found!"
-            exit 1
-          fi
-          
-          BATCH_SIZE=${{ github.event.client_payload.batch_size || github.event.inputs.batch_size }}
-          
-          # 'jq' ka istemal karke MC numbers ki list ko JSON mein badalna
-          JSON_CONTENT=$(cat mc_list.txt | jq -R . | jq -s -c --argjson size "$BATCH_SIZE" '
-            . as $all | 
-            [range(0; $all | length; $size)] | 
-            map({ "mc_list": $all[.:.+$size] | join("\n") }) | 
-            {"include": .}
-          ')
-          
-          echo "Generated Matrix:"
-          echo $JSON_CONTENT
-          echo "matrix=$JSON_CONTENT" >> $GITHUB_OUTPUT
-
-  trigger-extractors:
-    needs: dispatch-jobs
-    runs-on: ubuntu-latest
-    if: ${{ needs.dispatch-jobs.outputs.matrix != '{"include":[]}' }}
-
-    strategy:
-      matrix: ${{ fromJson(needs.dispatch-jobs.outputs.matrix) }}
-
-    steps:
-      - name: Trigger extractor for a batch
-        uses: peter-evans/repository-dispatch@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          token: ${{ secrets.MY_PAT }}
-          repository: ${{ github.repository }}
-          event-type: run-single-fmcsa-batch
-          client-payload: '{"mc_numbers": ${{ toJSON(matrix.mc_list) }} }'
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # --- YAHAN ASAL TABDEELI HAI ---
+      # Hum ab direct Python script ko chala rahe hain.
+      # Python script ab khud hi doosre workflow ko trigger karegi.
+      - name: Run the main dispatcher script
+        run: python main.py
+        env:
+          # Hum yahan apni "master key" ko Python script ke hawale kar rahe hain
+          # taake woh isay istemal karke, doosre workflows ko trigger kar sake.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
