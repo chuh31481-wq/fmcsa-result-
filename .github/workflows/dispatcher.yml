@@ -1,26 +1,17 @@
-name: FMCSA Dispatcher Workflow
+name: 1. FMCSA Dispatcher
 
 on:
   repository_dispatch:
-    types: [run-dispatcher-from-frontend]
+    types: [run-fmcsa-job-from-frontend]
 
 jobs:
-  dispatch-fmcsa-jobs:
+  dispatch:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Dispatch 100 scraper workflows
+        uses: benc-uk/workflow-dispatch@v1
         with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      # --- YAHAN TABDEELI HAI ---
-      - name: Run the main dispatcher script
-        run: python dispatcher.py # Humne isay dispatcher.py kar diya hai
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          workflow: extractor.yml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Hum 1 se 100 tak numbers ki ek list bana kar bhej rahe hain
+          inputs: ${{ toJSON(fromJSON('{"jobs": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62", "63", "64", "65", "66", "67", "68", "69", "70", "71", "72", "73", "74", "75", "76", "77", "78", "79", "80", "81", "82", "83", "84", "85", "86", "87", "88", "89", "90", "91", "92", "93", "94", "95", "96", "97", "98", "99", "100"] }').jobs.*.batch) }}
