@@ -19,12 +19,8 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # --- YAHAN ASAL TABDEELI HAI ---
-      # Hum ab direct Python script ko chala rahe hain.
-      # Python script ab khud hi doosre workflow ko trigger karegi.
+      # --- YAHAN TABDEELI HAI ---
       - name: Run the main dispatcher script
-        run: python main.py
+        run: python dispatcher.py # Humne isay dispatcher.py kar diya hai
         env:
-          # Hum yahan apni "master key" ko Python script ke hawale kar rahe hain
-          # taake woh isay istemal karke, doosre workflows ko trigger kar sake.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
