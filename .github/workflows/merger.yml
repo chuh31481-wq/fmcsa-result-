@@ -1,0 +1,85 @@
+name: 3. FMCSA Results Merger
+
+on:
+  workflow_run:
+    workflows: ["1. FMCSA Dispatcher"] # Yeh workflow tab chalega jab Dispatcher mukammal hoga
+    types:
+      - completed
+
+jobs:
+  merge-and-commit:
+    runs-on: ubuntu-latest
+    # Sirf tab chalao jab Dispatcher kamyab ho
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install pandas
+        run: pip install pandas
+
+      - name: Download all artifacts from the triggering run
+        uses: actions/download-artifact@v4
+        with:
+          # Hum us Dispatcher run ke tamam artifacts download kar rahe hain
+          run-id: ${{ github.event.workflow_run.id }}
+          path: temp-artifacts
+
+      - name: Merge all CSVs into one final file
+        id: merge_step
+        run: |
+          import pandas as pd
+          import os
+          import glob
+
+          path = 'temp-artifacts'
+          all_dfs = []
+          print(f"Searching for artifacts in: {os.path.abspath(path)}")
+
+          # Har sub-folder mein ja kar CSV file dhoondna
+          for folder in os.listdir(path):
+              folder_path = os.path.join(path, folder)
+              if os.path.isdir(folder_path):
+                  csv_files = glob.glob(os.path.join(folder_path, '*.csv'))
+                  for f in csv_files:
+                      try:
+                          df = pd.read_csv(f)
+                          all_dfs.append(df)
+                      except pd.errors.EmptyDataError:
+                          print(f'Skipping empty file: {f}')
+
+          if all_dfs:
+              final_df = pd.concat(all_dfs, ignore_index=True)
+              if 'USDOT Number' in final_df.columns:
+                  final_df.drop_duplicates(subset=['USDOT Number'], inplace=True)
+                  
+              output_dir = 'output'
+              if not os.path.exists(output_dir):
+                  os.makedirs(output_dir)
+                  
+              final_file_path = os.path.join(output_dir, 'final_fmcsa_leads.csv')
+              final_df.to_csv(final_file_path, index=False)
+              print(f'Successfully merged {len(all_dfs)} files into {final_file_path}. Final records: {len(final_df)}')
+              # Output set karna taake agla step chal sake
+              print(f"::set_output name=file_found::true")
+          else:
+              print('No CSV files were found to merge.')
+              print(f"::set_output name=file_found::false")
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'GitHub Actions Bot'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Commit and Push the final merged file
+        # Yeh step sirf tab chalega jab merge_step ne file banayi ho
+        if: steps.merge_step.outputs.file_found == 'true'
+        run: |
+          git add output/final_fmcsa_leads.csv
+          git commit -m "feat: Add final merged FMCSA leads file" || echo "No changes to commit"
+          git push
