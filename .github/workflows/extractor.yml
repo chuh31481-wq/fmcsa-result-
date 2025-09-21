@@ -32,3 +32,4 @@ jobs:
         with:
           name: fmcsa-leads-batch-${{ github.event.inputs.batch }}
           path: output/fmcsa_data_${{ github.event.inputs.batch }}.csv
+
