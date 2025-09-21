@@ -1,4 +1,4 @@
-name: 1. FMCSA Dispatcher
+name: 1. FMCSA Dynamic Dispatcher
 
 on:
   repository_dispatch:
@@ -7,11 +7,57 @@ on:
 jobs:
   dispatch:
     runs-on: ubuntu-latest
+    outputs:
+      # Hum yahan se batches ki list ko doosre jobs ke liye export karenge
+      batches: ${{ steps.create_matrix.outputs.batches }}
     steps:
-      - name: Dispatch 100 scraper workflows
+      - name: Checkout repository code
+        uses: actions/checkout@v4
+
+      - name: Calculate number of batches needed
+        id: calculate_batches
+        run: |
+          # Step 1: mc_list.txt mein total lines gino
+          TOTAL_LINES=$(wc -l < mc_list.txt)
+          
+          # Step 2: Batch size set karo
+          BATCH_SIZE=250
+          
+          # Step 3: Total batches ka hisaab lagao (ceiling division)
+          # Yeh formula (TOTAL_LINES + BATCH_SIZE - 1) / BATCH_SIZE hamesha sahi jawab dega
+          NUM_BATCHES=$(( (TOTAL_LINES + BATCH_SIZE - 1) / BATCH_SIZE ))
+          
+          echo "Total MC Numbers: $TOTAL_LINES"
+          echo "Batch Size: $BATCH_SIZE"
+          echo "Number of Batches to Run: $NUM_BATCHES"
+          
+          # Natijay ko agle step ke liye save karo
+          echo "::set_output name=num_batches::$NUM_BATCHES"
+
+      - name: Create job matrix from batches
+        id: create_matrix
+        run: |
+          # Step 4: 1 se lekar NUM_BATCHES tak numbers ki ek JSON list banao
+          # Misaal: Agar 3 batches hain, to yeh '["1", "2", "3"]' banayega
+          MATRIX=$(jq -c -n --argjson n ${{ steps.calculate_batches.outputs.num_batches }} '[range(1; $n + 1) | tostring]')
+          
+          echo "Generated Matrix: $MATRIX"
+          
+          # Is matrix ko job output ke tor par set karo
+          echo "::set_output name=batches::$MATRIX"
+
+  # Yeh ek naya "middle-man" job hai jo dynamic list par jobs chalayega
+  trigger-extractors:
+    needs: dispatch # Yeh 'dispatch' job ke baad chalega
+    runs-on: ubuntu-latest
+    strategy:
+      # Yahan asal jadoo hai. Yeh 'batches' ki list par loop chalayega
+      matrix:
+        batch: ${{ fromJson(needs.dispatch.outputs.batches) }}
+    steps:
+      - name: Dispatch scraper for batch ${{ matrix.batch }}
         uses: benc-uk/workflow-dispatch@v1
         with:
           workflow: extractor.yml
           token: ${{ secrets.GITHUB_TOKEN }}
-          # Hum 1 se 100 tak numbers ki ek list bana kar bhej rahe hain
-          inputs: ${{ toJSON(fromJSON('{"jobs": ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "60", "61", "62", "63", "64", "65", "66", "67", "68", "69", "70", "71", "72", "73", "74", "75", "76", "77", "78", "79", "80", "81", "82", "83", "84", "85", "86", "87", "88", "89", "90", "91", "92", "93", "94", "95", "96", "97", "98", "99", "100"] }').jobs.*.batch) }}
+          inputs: '{ "batch": "${{ matrix.batch }}" }'
