@@ -23,13 +23,12 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # --- YAHAN ASAL, AAKHRI TABDEELI HAI ---
+      # --- YAHAN TABDEELI HAI ---
       - name: Run scraper
-        run: python src/scraper.py ${{ github.event.inputs.batch }}
+        run: python scraper.py ${{ github.event.inputs.batch }} # Yeh ab scraper.py ko chalayega
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: fmcsa-leads-batch-${{ github.event.inputs.batch }}
           path: output/fmcsa_data_${{ github.event.inputs.batch }}.csv
-
