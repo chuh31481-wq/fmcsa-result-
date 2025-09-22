@@ -1,49 +1,47 @@
 name: FMCSA Dispatcher (All Batches)
 
-# --- YAHAN ASAL TABDEELI HAI ---
-# Humne 'repository_dispatch' ka naya darwaza add kar diya hai
 on:
-  # Yeh aapka purana, manual trigger hai (yeh abhi bhi kaam karega)
+  # Yeh trigger dashboard se call hoga
+  repository_dispatch:
+    types: [run-fmcsa-job-from-frontend]
+  
+  # Yeh trigger manual run ke liye hai
   workflow_dispatch:
     inputs:
       batch_size:
-        description: 'Batch size per run'
+        description: 'Number of MCs per batch file'
         required: false
         default: '250'
-  
-  # Yeh naya, automatic trigger hai jo dashboard se call hoga
-  repository_dispatch:
-    types: [run-fmcsa-job-from-frontend]
 
 jobs:
   dispatch:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository code
+        uses: actions/checkout@v4
 
-      - name: Split mc_list into batches
+      - name: Split mc_list.txt into batch files
         run: |
           mkdir -p batches
-          # Hum yahan 'github.event.inputs.batch_size' ka istemal kar rahe hain
-          # Agar manual run hai to user ki value, warna default 250
+          # Agar manual run hai to user ki value, warna default 250 istemal karo
           split -l ${{ github.event.inputs.batch_size || '250' }} mc_list.txt batches/batch_
+          echo "mc_list.txt has been split into smaller batch files:"
           ls -l batches
 
-      - name: Dispatch extractor for each batch
+      - name: Dispatch a workflow for each batch file
         env:
-          # Yahan PAT_TOKEN istemal ho raha hai, isay repository secrets mein laazmi add karein
+          # Yeh PAT_TOKEN laazmi hai. Isay repository secrets mein add karein.
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           i=0
           for f in batches/*; do
-            echo "Dispatching batch $f (index $i)..."
-            gh workflow run extractor.yml \
-              --ref main \
-              -f batch_index=$i \
-              -f batch_size=${{ github.event.inputs.batch_size || '250' }} \
-              -f concurrency=4 \
-              -f delay=1000 \
-              -f wait_seconds=0 \
-              -f mode=both
+            echo "Dispatching workflow for batch file $f (index $i)..."
+            
+            # --- YAHAN ASAL, AAKHRI TABDEELI HAI ---
+            # Hum ab sirf 'batch' input bhej rahe hain, jo extractor.yml maangta hai.
+            gh workflow run extractor.yml --ref main -f batch=$i
+            
             i=$((i+1))
+            # API rate limit se bachne ke liye thora sa waqfa
+            sleep 1
           done
