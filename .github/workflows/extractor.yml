@@ -1,18 +1,17 @@
-name: FMCSA Data Extractor
+name: 2. FMCSA Extractor
 
 on:
   workflow_dispatch:
     inputs:
-      batch:
-        description: 'Batch number to process'
+      batch_file_path:
+        description: 'The path to the batch file to process'
         required: true
-        default: '1'
 
 jobs:
-  build:
+  extract-data:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout repository code
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -23,11 +22,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run scraper
-        run: python scraper.py ${{ github.event.inputs.batch }}
+      - name: Run scraper for the given batch file
+        run: python scraper.py ${{ github.event.inputs.batch_file_path }}
 
-      - name: Upload artifact
+      - name: Upload results as an artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fmcsa-leads-batch-${{ github.event.inputs.batch }}
-          path: output/fmcsa_data_${{ github.event.inputs.batch }}.csv
+          # Hum poore output folder ko artifact bana rahe hain
+          name: fmcsa-raw-results-${{ github.run_id }}
+          path: output/
+          if-no-files-found: ignore
