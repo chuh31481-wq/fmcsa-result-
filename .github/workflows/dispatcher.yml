@@ -8,7 +8,6 @@ jobs:
   dispatch:
     runs-on: ubuntu-latest
     outputs:
-      # Hum yahan se batches ki list ko doosre jobs ke liye export karenge
       batches: ${{ steps.create_matrix.outputs.batches }}
     steps:
       - name: Checkout repository code
@@ -24,31 +23,30 @@ jobs:
           BATCH_SIZE=250
           
           # Step 3: Total batches ka hisaab lagao (ceiling division)
-          # Yeh formula (TOTAL_LINES + BATCH_SIZE - 1) / BATCH_SIZE hamesha sahi jawab dega
           NUM_BATCHES=$(( (TOTAL_LINES + BATCH_SIZE - 1) / BATCH_SIZE ))
           
           echo "Total MC Numbers: $TOTAL_LINES"
           echo "Batch Size: $BATCH_SIZE"
           echo "Number of Batches to Run: $NUM_BATCHES"
           
-          # Natijay ko agle step ke liye save karo
-          echo "::set_output name=num_batches::$NUM_BATCHES"
+          # --- YAHAN ASAL, AAKHRI TABDEELI HAI ---
+          # Hum GitHub Actions ka naya, sahi tareeqa istemal kar rahe hain
+          echo "num_batches=$NUM_BATCHES" >> $GITHUB_OUTPUT
 
       - name: Create job matrix from batches
         id: create_matrix
         run: |
           # Step 4: 1 se lekar NUM_BATCHES tak numbers ki ek JSON list banao
-          # Misaal: Agar 3 batches hain, to yeh '["1", "2", "3"]' banayega
           MATRIX=$(jq -c -n --argjson n ${{ steps.calculate_batches.outputs.num_batches }} '[range(1; $n + 1) | tostring]')
           
           echo "Generated Matrix: $MATRIX"
           
-          # Is matrix ko job output ke tor par set karo
-          echo "::set_output name=batches::$MATRIX"
+          # Hum yahan bhi naya, sahi tareeqa istemal kar rahe hain
+          echo "batches=$MATRIX" >> $GITHUB_OUTPUT
 
   # Yeh ek naya "middle-man" job hai jo dynamic list par jobs chalayega
   trigger-extractors:
-    needs: dispatch # Yeh 'dispatch' job ke baad chalega
+    needs: dispatch
     runs-on: ubuntu-latest
     strategy:
       # Yahan asal jadoo hai. Yeh 'batches' ki list par loop chalayega
