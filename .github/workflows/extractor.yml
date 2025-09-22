@@ -1,10 +1,10 @@
-name: 2. FMCSA Data Extractor
+name: FMCSA Data Extractor
 
 on:
   workflow_dispatch:
     inputs:
       batch:
-        description: 'USDOT batch number to process'
+        description: 'Batch number to process'
         required: true
         default: '1'
 
@@ -23,12 +23,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run scraper for one batch
+      - name: Run scraper
         run: python scraper.py ${{ github.event.inputs.batch }}
 
-      - name: Upload temporary CSV as artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: fmcsa-leads-batch-${{ github.event.inputs.batch }}
           path: output/fmcsa_data_${{ github.event.inputs.batch }}.csv
-          if-no-files-found: ignore # Agar file na bane to error mat do
