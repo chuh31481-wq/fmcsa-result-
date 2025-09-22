@@ -12,22 +12,22 @@ jobs:
       - name: Checkout repository code
         uses: actions/checkout@v4
 
-      - name: Split mc_list.txt into batch files
-        id: split_files
-        run: |
-          mkdir -p batches
-          split -l 250 mc_list.txt batches/batch_
-          echo "mc_list.txt has been split into smaller batch files."
-          # Tamam banayi gayi files ki ek list banakar agle step ko dena
-          BATCH_FILES=$(ls batches/batch_*)
-          echo "batch_files=$BATCH_FILES" >> $GITHUB_OUTPUT
-
-      - name: Trigger a workflow for each batch file
+      - name: Split MC list into chunks and dispatch jobs
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          for file in ${{ steps.split_files.outputs.batch_files }}; do
-            echo "Dispatching extractor job for batch file: $file"
-            gh workflow run extractor.yml --ref main -f batch_file_path=$file
+          # mc_list.txt ko 250 lines ki temporary files mein taqseem karo
+          split -l 250 mc_list.txt temp_batch_
+
+          # Har banayi gayi temporary file ke liye ek job trigger karo
+          for file in temp_batch_*; do
+            # File ke andar mojood tamam MC numbers ko parh kar, unhein comma se jor kar ek lambi string banao
+            MC_CHUNK=$(paste -s -d, "$file")
+            
+            echo "Dispatching extractor job for a chunk of MC numbers..."
+            
+            # Hum ab file ka path nahi, balke MC numbers ki poori string bhej rahe hain
+            gh workflow run extractor.yml --ref main -f mc_numbers="$MC_CHUNK"
+            
             sleep 1 # API rate limit se bachne ke liye
           done
