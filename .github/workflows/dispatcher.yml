@@ -1,61 +1,49 @@
-name: 1. FMCSA Dynamic Dispatcher
+name: FMCSA Dispatcher (All Batches)
 
+# --- YAHAN ASAL TABDEELI HAI ---
+# Humne 'repository_dispatch' ka naya darwaza add kar diya hai
 on:
+  # Yeh aapka purana, manual trigger hai (yeh abhi bhi kaam karega)
+  workflow_dispatch:
+    inputs:
+      batch_size:
+        description: 'Batch size per run'
+        required: false
+        default: '250'
+  
+  # Yeh naya, automatic trigger hai jo dashboard se call hoga
   repository_dispatch:
     types: [run-fmcsa-job-from-frontend]
 
 jobs:
   dispatch:
     runs-on: ubuntu-latest
-    outputs:
-      batches: ${{ steps.create_matrix.outputs.batches }}
     steps:
-      - name: Checkout repository code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Calculate number of batches needed
-        id: calculate_batches
+      - name: Split mc_list into batches
         run: |
-          # Step 1: mc_list.txt mein total lines gino
-          TOTAL_LINES=$(wc -l < mc_list.txt)
-          
-          # Step 2: Batch size set karo
-          BATCH_SIZE=250
-          
-          # Step 3: Total batches ka hisaab lagao (ceiling division)
-          NUM_BATCHES=$(( (TOTAL_LINES + BATCH_SIZE - 1) / BATCH_SIZE ))
-          
-          echo "Total MC Numbers: $TOTAL_LINES"
-          echo "Batch Size: $BATCH_SIZE"
-          echo "Number of Batches to Run: $NUM_BATCHES"
-          
-          # --- YAHAN ASAL, AAKHRI TABDEELI HAI ---
-          # Hum GitHub Actions ka naya, sahi tareeqa istemal kar rahe hain
-          echo "num_batches=$NUM_BATCHES" >> $GITHUB_OUTPUT
+          mkdir -p batches
+          # Hum yahan 'github.event.inputs.batch_size' ka istemal kar rahe hain
+          # Agar manual run hai to user ki value, warna default 250
+          split -l ${{ github.event.inputs.batch_size || '250' }} mc_list.txt batches/batch_
+          ls -l batches
 
-      - name: Create job matrix from batches
-        id: create_matrix
+      - name: Dispatch extractor for each batch
+        env:
+          # Yahan PAT_TOKEN istemal ho raha hai, isay repository secrets mein laazmi add karein
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          # Step 4: 1 se lekar NUM_BATCHES tak numbers ki ek JSON list banao
-          MATRIX=$(jq -c -n --argjson n ${{ steps.calculate_batches.outputs.num_batches }} '[range(1; $n + 1) | tostring]')
-          
-          echo "Generated Matrix: $MATRIX"
-          
-          # Hum yahan bhi naya, sahi tareeqa istemal kar rahe hain
-          echo "batches=$MATRIX" >> $GITHUB_OUTPUT
-
-  # Yeh ek naya "middle-man" job hai jo dynamic list par jobs chalayega
-  trigger-extractors:
-    needs: dispatch
-    runs-on: ubuntu-latest
-    strategy:
-      # Yahan asal jadoo hai. Yeh 'batches' ki list par loop chalayega
-      matrix:
-        batch: ${{ fromJson(needs.dispatch.outputs.batches) }}
-    steps:
-      - name: Dispatch scraper for batch ${{ matrix.batch }}
-        uses: benc-uk/workflow-dispatch@v1
-        with:
-          workflow: extractor.yml
-          token: ${{ secrets.GITHUB_TOKEN }}
-          inputs: '{ "batch": "${{ matrix.batch }}" }'
+          i=0
+          for f in batches/*; do
+            echo "Dispatching batch $f (index $i)..."
+            gh workflow run extractor.yml \
+              --ref main \
+              -f batch_index=$i \
+              -f batch_size=${{ github.event.inputs.batch_size || '250' }} \
+              -f concurrency=4 \
+              -f delay=1000 \
+              -f wait_seconds=0 \
+              -f mode=both
+            i=$((i+1))
+          done
