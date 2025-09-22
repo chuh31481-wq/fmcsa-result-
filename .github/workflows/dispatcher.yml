@@ -1,25 +1,33 @@
-name: FMCSA Dispatcher Workflow
+name: 1. FMCSA Dispatcher
 
 on:
   repository_dispatch:
-    types: [run-dispatcher-from-frontend]
+    types: [run-fmcsa-job-from-frontend]
+  workflow_dispatch:
 
 jobs:
-  dispatch-fmcsa-jobs:
+  dispatch-extractors:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout repository code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+      - name: Split mc_list.txt into batch files
+        id: split_files
+        run: |
+          mkdir -p batches
+          split -l 250 mc_list.txt batches/batch_
+          echo "mc_list.txt has been split into smaller batch files."
+          # Tamam banayi gayi files ki ek list banakar agle step ko dena
+          BATCH_FILES=$(ls batches/batch_*)
+          echo "batch_files=$BATCH_FILES" >> $GITHUB_OUTPUT
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
-      - name: Run the main dispatcher script
-        run: python dispatcher.py
+      - name: Trigger a workflow for each batch file
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          for file in ${{ steps.split_files.outputs.batch_files }}; do
+            echo "Dispatching extractor job for batch file: $file"
+            gh workflow run extractor.yml --ref main -f batch_file_path=$file
+            sleep 1 # API rate limit se bachne ke liye
+          done
