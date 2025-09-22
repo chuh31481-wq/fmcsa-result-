@@ -2,7 +2,7 @@ name: 3. FMCSA Results Merger
 
 on:
   workflow_run:
-    workflows: ["1. FMCSA Dynamic Dispatcher"]
+    workflows: ["1. FMCSA Dispatcher"]
     types:
       - completed
 
@@ -25,13 +25,11 @@ jobs:
       - name: Download all artifacts from the triggering run
         uses: actions/download-artifact@v4
         with:
-          run-id: ${{ github.event.workflow_run.id }}
+          name: fmcsa-raw-results-${{ github.event.workflow_run.id }}
           path: temp-artifacts
 
       - name: Merge all CSVs into one final file
         id: merge_step
-        # --- YAHAN ASAL, AAKHRI TABDEELI HAI ---
-        # Humne poore Python code ko python -c "..." ke andar daal diya hai
         run: |
           python -c "
 import pandas as pd
@@ -40,24 +38,19 @@ import glob
 
 path = 'temp-artifacts'
 all_dfs = []
-print(f\"Searching for artifacts in: {os.path.abspath(path)}\")
+csv_files = glob.glob(os.path.join(path, '*.csv'))
 
-# Har sub-folder mein ja kar CSV file dhoondna
-for folder in os.listdir(path):
-    folder_path = os.path.join(path, folder)
-    if os.path.isdir(folder_path):
-        csv_files = glob.glob(os.path.join(folder_path, '*.csv'))
-        for f in csv_files:
-            try:
-                df = pd.read_csv(f)
-                all_dfs.append(df)
-            except pd.errors.EmptyDataError:
-                print(f'Skipping empty file: {f}')
+for f in csv_files:
+    try:
+        df = pd.read_csv(f)
+        all_dfs.append(df)
+    except pd.errors.EmptyDataError:
+        print(f'Skipping empty file: {f}')
 
 if all_dfs:
     final_df = pd.concat(all_dfs, ignore_index=True)
-    if 'USDOT Number' in final_df.columns:
-        final_df.drop_duplicates(subset=['USDOT Number'], inplace=True)
+    if 'MC_Number' in final_df.columns:
+        final_df.drop_duplicates(subset=['MC_Number'], inplace=True)
     
     output_dir = 'output'
     if not os.path.exists(output_dir):
@@ -65,12 +58,11 @@ if all_dfs:
     
     final_file_path = os.path.join(output_dir, 'final_fmcsa_leads.csv')
     final_df.to_csv(final_file_path, index=False)
-    print(f'Successfully merged {len(all_dfs)} files into {final_file_path}. Final records: {len(final_df)}')
-    # Output set karna taake agla step chal sake
+    print(f'Successfully merged {len(all_dfs)} files into {final_file_path}.')
     with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
         f.write('file_found=true\n')
 else:
-    print('No CSV files were found to merge.')
+    print('No batch files found to merge.')
     with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
         f.write('file_found=false\n')
 "
