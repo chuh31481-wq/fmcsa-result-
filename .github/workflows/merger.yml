@@ -25,6 +25,7 @@ jobs:
       - name: Download all artifacts from the triggering run
         uses: actions/download-artifact@v4
         with:
+          # Hum us Dispatcher run ke tamam artifacts download kar rahe hain
           name: fmcsa-raw-results-${{ github.event.workflow_run.id }}
           path: temp-artifacts
 
@@ -38,6 +39,7 @@ import glob
 
 path = 'temp-artifacts'
 all_dfs = []
+# Hum ab direct temp-artifacts folder ke andar CSV files dhoond rahe hain
 csv_files = glob.glob(os.path.join(path, '*.csv'))
 
 for f in csv_files:
