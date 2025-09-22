@@ -3,8 +3,8 @@ name: 2. FMCSA Extractor
 on:
   workflow_dispatch:
     inputs:
-      batch_file_path:
-        description: 'The path to the batch file to process'
+      mc_numbers:
+        description: 'A comma-separated string of MC numbers to process'
         required: true
 
 jobs:
@@ -22,8 +22,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run scraper for the given batch file
-        run: python scraper.py ${{ github.event.inputs.batch_file_path }}
+      - name: Run scraper with the received MC numbers
+        # Hum yahan MC numbers ki poori string ko scraper.py ko de rahe hain
+        run: python scraper.py "${{ github.event.inputs.mc_numbers }}"
 
       - name: Upload results as an artifact
         uses: actions/upload-artifact@v4
