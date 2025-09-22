@@ -1,47 +1,25 @@
-name: FMCSA Dispatcher (All Batches)
+name: FMCSA Dispatcher Workflow
 
 on:
-  # Yeh trigger dashboard se call hoga
   repository_dispatch:
-    types: [run-fmcsa-job-from-frontend]
-  
-  # Yeh trigger manual run ke liye hai
-  workflow_dispatch:
-    inputs:
-      batch_size:
-        description: 'Number of MCs per batch file'
-        required: false
-        default: '250'
+    types: [run-dispatcher-from-frontend]
 
 jobs:
-  dispatch:
+  dispatch-fmcsa-jobs:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository code
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Split mc_list.txt into batch files
-        run: |
-          mkdir -p batches
-          # Agar manual run hai to user ki value, warna default 250 istemal karo
-          split -l ${{ github.event.inputs.batch_size || '250' }} mc_list.txt batches/batch_
-          echo "mc_list.txt has been split into smaller batch files:"
-          ls -l batches
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-      - name: Dispatch a workflow for each batch file
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run the main dispatcher script
+        run: python dispatcher.py
         env:
-          # Yeh PAT_TOKEN laazmi hai. Isay repository secrets mein add karein.
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          i=0
-          for f in batches/*; do
-            echo "Dispatching workflow for batch file $f (index $i)..."
-            
-            # --- YAHAN ASAL, AAKHRI TABDEELI HAI ---
-            # Hum ab sirf 'batch' input bhej rahe hain, jo extractor.yml maangta hai.
-            gh workflow run extractor.yml --ref main -f batch=$i
-            
-            i=$((i+1))
-            # API rate limit se bachne ke liye thora sa waqfa
-            sleep 1
-          done
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
